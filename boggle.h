@@ -7,7 +7,8 @@
 #include <utility>
 #include <string>
 #endif
-
+bool hasSameDirectionPrefix(const std::set<std::string>& prefix, const std::set<std::string>& result, const std::string& word,
+                            unsigned int r, unsigned int c, int dr, int dc);
 std::vector<std::vector<char> > genBoard(unsigned int n, int seed);
 void printBoard(const std::vector<std::vector<char> >& board);
 std::pair<std::set<std::string>, std::set<std::string> > parseDict(std::string fname);

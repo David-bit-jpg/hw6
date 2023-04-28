@@ -3,7 +3,6 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
-
 typedef size_t HASH_INDEX_T;
 
 
@@ -35,7 +34,7 @@ struct LinearProber : public Prober<KeyType> {
     {
         // Complete the condition below that indicates failure
         // to find the key or an empty slot
-        if( /* Fill me in */ ) {
+        if(this->numProbes_ >= this->m_ ) {
             return this->npos; 
         }
         HASH_INDEX_T loc = (this->start_ + this->numProbes_) % this->m_;
@@ -55,11 +54,11 @@ struct DoubleHashProber : public Prober<KeyType>
     static const HASH_INDEX_T DOUBLE_HASH_MOD_VALUES[]; 
     /// The number of elements in the array above
     static const int DOUBLE_HASH_MOD_SIZE;
-
+    HASH_INDEX_T m_;
+    KeyType key_;
     //==================================
     // Add data members, as desired
     //==================================
-
 private:
     // Complete
     HASH_INDEX_T findModulusToUseFromTableSize(HASH_INDEX_T currTableSize)
@@ -97,14 +96,19 @@ public:
         HASH_INDEX_T modulus = findModulusToUseFromTableSize(m);
         // Compute probe stepsize given modulus and h2(k) 
         dhstep_ = modulus - h2_(key) % modulus;
+        m_ = m;
+        key_ = key;
     }
-
     // To be completed
     HASH_INDEX_T next() 
     {
-
-
-
+        if( this->numProbes_ >= this->m_ ) 
+        {
+            return this->npos; 
+        }
+        HASH_INDEX_T loc = (this->start_ + this->numProbes_ * dhstep_) % this->m_;
+        this->numProbes_++;
+        return loc;
     }
 };
 
@@ -144,7 +148,6 @@ public:
             deleted = false;
         }
     };
-
     /**
      * @brief Construct a new Hash Table object
      * 
@@ -246,7 +249,6 @@ private:
 
     // Constant to signify an invalid hash location is being returned
     static const HASH_INDEX_T npos = Prober::npos;
-
     /**
      * @brief Resizes the hash table replacing the old with a new
      * table of the next prime size given in CAPACITIES.  Must rehash
@@ -267,15 +269,18 @@ private:
     mutable size_t totalProbes_; // mutable allows const member functions to modify this member
     // prime capacities to be used when resizing/rehashing is needed
     static const HASH_INDEX_T CAPACITIES[];
-    HASH_INDEX_T mIndex_;  // index to CAPACITIES
-
+    HASH_INDEX_T mIndex_ = 0;  // index to CAPACITIES
     // ADD MORE DATA MEMBERS HERE, AS NECESSARY
-
+    size_t m_;
+    double alpha = 0;
+    size_t cnt = 0;
+    size_t dcnt =0;
 };
 
 // ----------------------------------------------------------------------------
 //                           Hash Table Implementation
 // ----------------------------------------------------------------------------
+
 
 // Static array of prime table sizes
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
@@ -293,45 +298,99 @@ HashTable<K,V,Prober,Hash,KEqual>::HashTable(
        :  hash_(hash), kequal_(kequal), prober_(prober)
 {
     // Initialize any other data members as necessary
-
+    totalProbes_ = 0;
+    std::vector<HashItem*> newTable(CAPACITIES[mIndex_], nullptr);
+    table_ = newTable;
+    alpha = resizeAlpha;
+    cnt = 0;
+    dcnt = 0;
 }
 
 // To be completed
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
 HashTable<K,V,Prober,Hash,KEqual>::~HashTable()
 {
-
+      for (size_t i = 0; i < CAPACITIES[mIndex_]; i++) 
+      {
+        delete table_[i];
+      }
+      cnt = 0;
+      dcnt = 0;
 }
 
 // To be completed
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
 bool HashTable<K,V,Prober,Hash,KEqual>::empty() const
 {
-
+  return cnt==0;
 }
 
 // To be completed
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
 size_t HashTable<K,V,Prober,Hash,KEqual>::size() const
 {
-
+  return cnt;
 }
 
 // To be completed
+    /**
+     * @brief Inserts a new item into the map, or, if an item with the
+     *        given key already exists, it updates the Value of that item
+     *        with the second value of the pair, p
+     * 
+     * @param p Pair to insert  
+     * @throw std::logic_error If no free location can be found
+     */
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
 void HashTable<K,V,Prober,Hash,KEqual>::insert(const ItemType& p)
 {
-
-
+  double loadFactor = (static_cast<double>(cnt)+static_cast<double>(dcnt)) / CAPACITIES[mIndex_];
+  if(loadFactor >= alpha)
+  {
+    resize();
+  }
+  if((cnt+dcnt)==CAPACITIES[mIndex_])
+  {
+    throw std::logic_error("No space");
+  }
+  const KeyType& key = p.first;
+  const ValueType& value = p.second;
+  HASH_INDEX_T ind = probe(key);
+    if(table_[ind]==nullptr)
+    {
+      HashItem* temp = new HashItem(p);
+      table_[ind] = temp;
+      cnt++;
+      loadFactor = static_cast<double>(cnt) / CAPACITIES[mIndex_];
+      return;
+    }
+    else if(key == table_[ind]->item.first && !table_[ind]->deleted)
+    {
+      table_[ind]->item.second = value;
+      return;
+    }
 }
+
 
 // To be completed
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
 void HashTable<K,V,Prober,Hash,KEqual>::remove(const KeyType& key)
 {
-
-
+    HASH_INDEX_T ind = probe(key);
+        if (table_[ind] != nullptr && !table_[ind]->deleted && kequal_(table_[ind]->item.first, key))
+        {
+            table_[ind]->deleted = true;
+            dcnt++;
+            cnt--;
+            return;
+        }
+        else
+        {
+            return;
+        }
 }
+
+
 
 
 // Complete
@@ -399,14 +458,59 @@ typename HashTable<K,V,Prober,Hash,KEqual>::HashItem* HashTable<K,V,Prober,Hash,
     return table_[h];
 }
 
+    /**
+     * @brief Resizes the hash table replacing the old with a new
+     * table of the next prime size given in CAPACITIES.  Must rehash
+     * all non-deleted items while freeing all deleted items.
+     * 
+     * Must run in O(m) where m is the new table size
+     * 
+     * @throws std::logic_error if no more CAPACITIES exist
+     */
 
 // To be completed
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
 void HashTable<K,V,Prober,Hash,KEqual>::resize()
 {
+    mIndex_++;
+    if (mIndex_ == sizeof(CAPACITIES)) 
+    {
+        throw std::logic_error("Max Capacities");
+    }
 
-    
+    HASH_INDEX_T newSize = CAPACITIES[mIndex_];
+    std::vector<HashItem*> newTable(newSize, nullptr);
+    for (HashItem* item : table_)
+    {
+        if (item != nullptr && !item->deleted)
+        {
+            const KeyType& key = item->item.first;
+            HASH_INDEX_T idx = hash_(key) % newSize;
+            newTable[idx] = item;
+        }
+        else if(item!=nullptr&&item->deleted)
+        {
+            delete item;
+        }
+        else
+        {
+            delete item;
+        }
+    }
+    dcnt = 0;
+    table_ = newTable;
 }
+
+    /**
+     * @brief Performs the probing sequence and returns the index
+     * of the table location with the given key or the location where
+     * key can be inserted (i.e. the index now contains nullptr) but is
+     * available.
+     * 
+     * @param key 
+     * @return returns npos is the key does not exist and
+     * no free location is available
+     */
 
 // Almost complete
 template<typename K, typename V, typename Prober, typename Hash, typename KEqual>
@@ -414,7 +518,6 @@ HASH_INDEX_T HashTable<K,V,Prober,Hash,KEqual>::probe(const KeyType& key) const
 {
     HASH_INDEX_T h = hash_(key) % CAPACITIES[mIndex_];
     prober_.init(h, CAPACITIES[mIndex_], key);
-
     HASH_INDEX_T loc = prober_.next(); 
     totalProbes_++;
     while(Prober::npos != loc)
@@ -424,13 +527,13 @@ HASH_INDEX_T HashTable<K,V,Prober,Hash,KEqual>::probe(const KeyType& key) const
         }
         // fill in the condition for this else if statement which should 
         // return 'loc' if the given key exists at this location
-        else if(/* Fill me in */) {
+        else if(key == table_[loc]->item.first && !table_[loc]->deleted) 
+        {
             return loc;
         }
         loc = prober_.next();
         totalProbes_++;
     }
-
     return npos;
 }
 

@@ -87,13 +87,46 @@ std::set<std::string> boggle(const std::set<std::string>& dict, const std::set<s
 			boggleHelper(dict, prefix, board, "", result, i, j, 1, 1);
 		}
 	}
-	
 	return result;
 }
 
-bool boggleHelper(const std::set<std::string>& dict, const std::set<std::string>& prefix, const std::vector<std::vector<char> >& board, 
-								   std::string word, std::set<std::string>& result, unsigned int r, unsigned int c, int dr, int dc)
+bool boggleHelper(const std::set<std::string>& dict, const std::set<std::string>& prefix, const std::vector<std::vector<char>>& board,
+                  std::string word, std::set<std::string>& result, unsigned int r, unsigned int c, int dr, int dc)
 {
-//add your solution here!
+    unsigned int n = board.size();
+    if (r >= n || c >= n) {
+        return false;
+    }
+    
+    word += board[r][c];
+    if (prefix.find(word) != prefix.end()) //a prefix
+    {
+        bool found = false;
+        if (dict.find(word) != dict.end()) //also a valid word
+        {
+          found = boggleHelper(dict, prefix, board, word, result, r + dr, c + dc, dr, dc);
+          if(!found)//cannot find longer solution
+          {
+            result.insert(word);//just this one
+            found =true;//found the longest for this prefix
+          }
+          return found;
+        }
+          found = boggleHelper(dict, prefix, board, word, result, r + dr, c + dc, dr, dc);
+          return found;
+    }
+    if(dict.find(word) != dict.end())
+    {
+       bool found = false;
+        found = boggleHelper(dict, prefix, board, word, result, r + dr, c + dc, dr, dc);
+          if(!found)//cannot find longer solution
+          {
+            result.insert(word);//just this one
+            found =true;//found the longest for this prefix
+          }
+          return found;
+    }
 
+    
+    return false;
 }
